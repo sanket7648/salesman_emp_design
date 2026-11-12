@@ -1,3 +1,0 @@
-- [x] Build salesperson and admin preview screens with reference-matched navigation and dashboards.
-- [x] Add admin Commission Review and Payout empty states and a salesperson form with demo verification and local-only Aadhaar selection.
-- [x] Verify the preview and commit the completed changes.

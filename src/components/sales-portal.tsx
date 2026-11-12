@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
-  MapPin,
   Plus,
   Search,
   Smartphone,
@@ -23,9 +22,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 
 type Workspace = "salesperson" | "admin";
-type SalesPage = "overview" | "owner-info" | "my-owners" | "commissions" | "payouts";
+type SalesPage = "overview" | "my-owners" | "commissions" | "payouts";
 type AdminPage = "overview" | "salespeople" | "referrals" | "commission-review" | "payouts";
 type Page = SalesPage | AdminPage;
+
+type OwnerProperty = {
+  name: string;
+  type: string;
+  address: string;
+  status: string;
+};
+
+type OwnerRecord = {
+  name: string;
+  mobile: string;
+  properties: OwnerProperty[];
+};
 
 type Salesperson = {
   id: number;
@@ -36,9 +48,25 @@ type Salesperson = {
   aadhaarFile: string;
 };
 
+type CommissionRecord = {
+  id: string;
+  activity: string;
+  salesperson: string;
+  generated: string;
+  amount: number;
+  status: "Pending" | "Approved" | "Rejected";
+};
+
+type PayoutRecord = {
+  reference: string;
+  salesperson: string;
+  amount: number;
+  method: "UPI" | "NEFT";
+  status: "Processing" | "Paid" | "Failed";
+};
+
 const salesNavigation = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "owner-info", label: "Owner info", icon: FileText },
   { id: "my-owners", label: "My owners", icon: UsersRound },
   { id: "commissions", label: "Commissions", icon: CircleDollarSign },
   { id: "payouts", label: "Payout history", icon: WalletCards },
@@ -47,19 +75,18 @@ const salesNavigation = [
 const adminNavigation = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "salespeople", label: "Salespeople", icon: UsersRound },
-  { id: "referrals", label: "All referrals", icon: ClipboardList },
+  { id: "referrals", label: "All owners", icon: ClipboardList },
   { id: "commission-review", label: "Commission review", icon: CircleDollarSign },
   { id: "payouts", label: "Payouts", icon: WalletCards },
 ] as const;
 
 const pageCopy: Record<Page, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: "OPERATIONS OVERVIEW", title: "Keep the team moving.", description: "A clear view of acquisition, approvals, and payout flow." },
-  "owner-info": { eyebrow: "YOUR PROFILE", title: "Owner info", description: "Your salesperson profile and contact details." },
   "my-owners": { eyebrow: "OWNER RELATIONSHIPS", title: "Referral pipeline", description: "Every owner attributed through the Nestni sales team." },
   commissions: { eyebrow: "COMMISSIONS", title: "Commission review", description: "Review generated commissions before they become payable." },
   payouts: { eyebrow: "PAYOUTS", title: "Payout history", description: "Track manual UPI and NEFT payout processing." },
   salespeople: { eyebrow: "TEAM MANAGEMENT", title: "Salespeople", description: "Create and manage the people growing Nestni’s owner network." },
-  referrals: { eyebrow: "OWNER RELATIONSHIPS", title: "Referral pipeline", description: "Every owner attributed through the Nestni sales team." },
+  referrals: { eyebrow: "OWNER RELATIONSHIPS", title: "All owners", description: "Owners referred through the Nestni sales team." },
   "commission-review": { eyebrow: "COMMISSIONS", title: "Commission review", description: "Review generated commissions before they become payable." },
 };
 
@@ -71,17 +98,49 @@ const salesCards = [
 
 const adminCards = [
   { label: "Salespeople", value: "0", note: "0 active today", icon: UsersRound, tone: "neutral" },
-  { label: "Referred owners", value: "0", note: "0 registered", icon: ClipboardList, tone: "orange" },
+  { label: "All owners", value: "0", note: "0 registered", icon: ClipboardList, tone: "orange" },
   { label: "Commission generated", value: "₹0", note: "0 awaiting review", icon: CircleDollarSign, tone: "green" },
   { label: "Payouts processed", value: "₹0", note: "Manual payouts", icon: WalletCards, tone: "blue" },
 ] as const;
+
+const sampleOwners: OwnerRecord[] = [
+  {
+    name: "Sample Owner",
+    mobile: "0000000001",
+    properties: [
+      { name: "Sample Property 1", type: "2 BHK Apartment", address: "Indiranagar, Bengaluru", status: "Available" },
+      { name: "Sample Property 2", type: "1 BHK Apartment", address: "Whitefield, Bengaluru", status: "Under review" },
+    ],
+  },
+];
+
+const sampleCommissions: CommissionRecord[] = [
+  { id: "COM-1042", activity: "Indiranagar property referral", salesperson: "Aarav Sharma", generated: "12 Nov 2026", amount: 12500, status: "Pending" },
+  { id: "COM-1038", activity: "Whitefield property referral", salesperson: "Aarav Sharma", generated: "10 Nov 2026", amount: 8500, status: "Approved" },
+  { id: "COM-1031", activity: "Koramangala property referral", salesperson: "Maya Patel", generated: "08 Nov 2026", amount: 15000, status: "Pending" },
+  { id: "COM-1024", activity: "Jubilee Hills property referral", salesperson: "Maya Patel", generated: "05 Nov 2026", amount: 7000, status: "Rejected" },
+];
+
+const samplePayouts: PayoutRecord[] = [
+  { reference: "PAY-2081", salesperson: "Aarav Sharma", amount: 8500, method: "UPI", status: "Paid" },
+  { reference: "PAY-2076", salesperson: "Aarav Sharma", amount: 5000, method: "NEFT", status: "Processing" },
+  { reference: "PAY-2069", salesperson: "Maya Patel", amount: 12000, method: "NEFT", status: "Paid" },
+  { reference: "PAY-2062", salesperson: "Maya Patel", amount: 3000, method: "UPI", status: "Failed" },
+];
+
+function formatRupees(amount: number) {
+  return `₹${amount.toLocaleString("en-IN")}`;
+}
 
 export function SalesPortal() {
   const [workspace, setWorkspace] = useState<Workspace>("salesperson");
   const [page, setPage] = useState<Page>("overview");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [quickSearchOpen, setQuickSearchOpen] = useState(false);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [searchValue, setSearchValue] = useState("");
+  const [commissionStatusFilter, setCommissionStatusFilter] = useState("all");
+  const [payoutStatusFilter, setPayoutStatusFilter] = useState("all");
   const [mobile, setMobile] = useState("");
   const [numberVerified, setNumberVerified] = useState(false);
   const [aadhaarFile, setAadhaarFile] = useState("");
@@ -96,9 +155,36 @@ export function SalesPortal() {
     );
   }, [salespeople, searchValue]);
 
+  const visibleCommissions = useMemo(() => {
+    const query = searchValue.trim().toLowerCase();
+    return sampleCommissions.filter((commission) => {
+      const matchesStatus = commissionStatusFilter === "all" || commission.status === commissionStatusFilter;
+      const matchesSearch = [commission.id, commission.activity, commission.salesperson, commission.generated, commission.status]
+        .some((value) => value.toLowerCase().includes(query));
+      const matchesSalesperson = workspace === "admin" || commission.salesperson === "Aarav Sharma";
+      return matchesStatus && matchesSearch && matchesSalesperson;
+    });
+  }, [commissionStatusFilter, searchValue, workspace]);
+
+  const visiblePayouts = useMemo(() => {
+    const query = searchValue.trim().toLowerCase();
+    return samplePayouts.filter((payout) => {
+      const matchesStatus = payoutStatusFilter === "all" || payout.status === payoutStatusFilter;
+      const matchesSearch = [payout.reference, payout.salesperson, payout.method, payout.status]
+        .some((value) => value.toLowerCase().includes(query));
+      const matchesSalesperson = workspace === "admin" || payout.salesperson === "Aarav Sharma";
+      return matchesStatus && matchesSearch && matchesSalesperson;
+    });
+  }, [payoutStatusFilter, searchValue, workspace]);
+
   function selectWorkspace(next: Workspace) {
     setWorkspace(next);
     setPage("overview");
+    setSearchValue("");
+  }
+
+  function navigateToPage(nextPage: Page) {
+    setPage(nextPage);
     setSearchValue("");
   }
 
@@ -131,8 +217,7 @@ export function SalesPortal() {
   const showReferrals = page === "referrals" || page === "my-owners";
   const showCommission = page === "commission-review" || page === "commissions";
   const showPayouts = page === "payouts";
-  const pageIsTable = showSalespersonList || showReferrals || showCommission || showPayouts;
-  const resultsCount = showSalespersonList ? filteredSalespeople.length : 0;
+  const resultsCount = showSalespersonList ? filteredSalespeople.length : showCommission ? visibleCommissions.length : showPayouts ? visiblePayouts.length : 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground md:grid md:grid-cols-[258px_minmax(0,1fr)]">
@@ -147,7 +232,7 @@ export function SalesPortal() {
               <Button
                 key={item.id}
                 variant="ghost"
-                onClick={() => setPage(item.id)}
+                onClick={() => navigateToPage(item.id)}
                 aria-current={active ? "page" : undefined}
                 className={`h-12 w-full justify-start gap-3 rounded-md px-3 text-sm ${active ? "bg-portal-nav-active text-foreground hover:bg-portal-nav-active" : "text-portal-sidebar-foreground hover:bg-portal-sidebar-hover hover:text-portal-sidebar-foreground"}`}
               >
@@ -182,7 +267,7 @@ export function SalesPortal() {
               const Icon = item.icon;
               const active = page === item.id;
               return (
-                <Button key={item.id} size="sm" variant={active ? "secondary" : "ghost"} onClick={() => setPage(item.id)} aria-current={active ? "page" : undefined} className="shrink-0 gap-1.5">
+                <Button key={item.id} size="sm" variant={active ? "secondary" : "ghost"} onClick={() => navigateToPage(item.id)} aria-current={active ? "page" : undefined} className="shrink-0 gap-1.5">
                   <Icon className="size-4" />{item.label}
                 </Button>
               );
@@ -195,7 +280,7 @@ export function SalesPortal() {
             <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
               <div>
                 <p className="font-mono text-xs tracking-wide text-muted-foreground">{currentPage.eyebrow}</p>
-                <h1 className="mt-3 text-3xl font-medium tracking-tight sm:text-4xl">{page === "overview" && workspace === "salesperson" ? "Your Info" : currentPage.title}</h1>
+                <h1 className="mt-3 text-3xl font-medium tracking-tight sm:text-4xl">{page === "overview" && workspace === "salesperson" ? "Sales dashboard" : currentPage.title}</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">{workspace === "salesperson" && page === "overview" ? "Your latest activity and commission performance, in one place." : currentPage.description}</p>
               </div>
               {showSalespersonList && (
@@ -203,11 +288,23 @@ export function SalesPortal() {
                   <Plus className="size-4" /> Add salesperson
                 </Button>
               )}
+              {workspace === "salesperson" && page === "overview" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Quick Search"
+                  title="Quick Search"
+                  onClick={() => setQuickSearchOpen(true)}
+                >
+                  <Search aria-hidden="true" className="size-4" />
+                </Button>
+              )}
               {showReferrals && <span className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">0 owners</span>}
             </div>
 
             {page === "overview" ? (
-              <Overview workspace={workspace} salespersonCount={salespeople.length} onOpenSalespeople={() => setPage("salespeople")} />
+              <Overview workspace={workspace} salespersonCount={salespeople.length} onOpenSalespeople={() => navigateToPage("salespeople")} />
             ) : showSalespersonList ? (
               <DataTable
                 searchLabel="Search salespeople..."
@@ -238,22 +335,51 @@ export function SalesPortal() {
             ) : showCommission ? (
               <DataTable
                 searchLabel="Search commissions..."
-                count={0}
+                count={visibleCommissions.length}
                 headers={["Activity", "Salesperson", "Generated", "Amount", "Status", "Action"]}
-                emptyTitle="No records yet"
-                emptyDescription="New activity will show up here."
-              />
+                filterLabel="Filter commissions by status"
+                filterValue={commissionStatusFilter}
+                filterOptions={["all", "Pending", "Approved", "Rejected"]}
+                onFilterChange={setCommissionStatusFilter}
+                onSearch={setSearchValue}
+                emptyTitle="No matching commissions"
+                emptyDescription="Try changing the search or status filter."
+              >
+                {visibleCommissions.map((commission) => (
+                  <tr key={commission.id} className="border-t border-border">
+                    <td className="px-5 py-4">{commission.activity}</td>
+                    <td className="px-5 py-4">{workspace === "admin" ? commission.salesperson : "You"}</td>
+                    <td className="px-5 py-4">{commission.generated}</td>
+                    <td className="px-5 py-4">₹{commission.amount.toLocaleString("en-IN")}</td>
+                    <td className="px-5 py-4"><StatusPill label={commission.status} /></td>
+                    <td className="px-5 py-4 text-muted-foreground">{commission.status === "Pending" ? "Review" : "—"}</td>
+                  </tr>
+                ))}
+              </DataTable>
             ) : showPayouts ? (
               <DataTable
                 searchLabel="Search payouts..."
-                count={0}
+                count={visiblePayouts.length}
                 headers={["Reference", "Salesperson", "Amount", "Method", "Status"]}
-                emptyTitle="No records yet"
-                emptyDescription="New activity will show up here."
-              />
-            ) : (
-              <ProfilePanel workspace={workspace} />
-            )}
+                filterLabel="Filter payouts by status"
+                filterValue={payoutStatusFilter}
+                filterOptions={["all", "Processing", "Paid", "Failed"]}
+                onFilterChange={setPayoutStatusFilter}
+                onSearch={setSearchValue}
+                emptyTitle="No matching payouts"
+                emptyDescription="Try changing the search or status filter."
+              >
+                {visiblePayouts.map((payout) => (
+                  <tr key={payout.reference} className="border-t border-border">
+                    <td className="px-5 py-4 font-medium">{payout.reference}</td>
+                    <td className="px-5 py-4">{workspace === "admin" ? payout.salesperson : "You"}</td>
+                    <td className="px-5 py-4">₹{payout.amount.toLocaleString("en-IN")}</td>
+                    <td className="px-5 py-4">{payout.method}</td>
+                    <td className="px-5 py-4"><StatusPill label={payout.status} /></td>
+                  </tr>
+                ))}
+              </DataTable>
+            ) : null}
           </div>
         </main>
       </div>
@@ -290,6 +416,7 @@ export function SalesPortal() {
           </form>
         </DialogContent>
       </Dialog>
+      <QuickSearchDialog open={quickSearchOpen} onOpenChange={setQuickSearchOpen} />
     </div>
   );
 }
@@ -305,12 +432,29 @@ function Brand() {
 
 function Overview({ workspace, salespersonCount, onOpenSalespeople }: { workspace: Workspace; salespersonCount: number; onOpenSalespeople: () => void }) {
   const cards = workspace === "admin" ? adminCards : salesCards;
+
   return (
     <>
       <section aria-label="Summary" className={`grid gap-4 ${workspace === "admin" ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
         {cards.map((card) => {
           const Icon = card.icon;
-          const value = workspace === "admin" && card.label === "Salespeople" ? String(salespersonCount) : card.value;
+          let value: string = card.value;
+          let note: string = card.note;
+          if (workspace === "admin" && card.label === "Salespeople") value = String(salespersonCount);
+          if (card.label === "Commission generated") {
+            value = formatRupees(sampleCommissions.reduce((total, commission) => total + commission.amount, 0));
+            note = `${sampleCommissions.filter((commission) => commission.status === "Pending").length} awaiting review`;
+          }
+          if (card.label === "Payouts processed") {
+            value = formatRupees(samplePayouts.filter((payout) => payout.status === "Paid").reduce((total, payout) => total + payout.amount, 0));
+          }
+          if (card.label === "Pending commission") {
+            value = formatRupees(sampleCommissions.filter((commission) => commission.salesperson === "Aarav Sharma" && commission.status === "Pending").reduce((total, commission) => total + commission.amount, 0));
+          }
+          if (card.label === "Approved commission") {
+            value = formatRupees(sampleCommissions.filter((commission) => commission.salesperson === "Aarav Sharma" && commission.status === "Approved").reduce((total, commission) => total + commission.amount, 0));
+            note = `${formatRupees(samplePayouts.filter((payout) => payout.salesperson === "Aarav Sharma" && payout.status === "Paid").reduce((total, payout) => total + payout.amount, 0))} paid to date`;
+          }
           return (
             <article key={card.label} className={`min-h-48 rounded-lg border border-border border-t-[3px] bg-card p-5 shadow-sm ${card.tone === "orange" ? "border-t-portal-orange" : card.tone === "blue" ? "border-t-portal-blue" : card.tone === "green" ? "border-t-portal-success" : "border-t-foreground"}`}>
               <div className="flex items-start justify-between gap-3">
@@ -318,7 +462,7 @@ function Overview({ workspace, salespersonCount, onOpenSalespeople }: { workspac
                 <span className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-primary"><Icon className="size-[18px]" /></span>
               </div>
               <p className="mt-5 text-3xl font-semibold tracking-tight">{value}</p>
-              <p className="mt-3 text-sm text-muted-foreground">{card.note}</p>
+              <p className="mt-3 text-sm text-muted-foreground">{note}</p>
             </article>
           );
         })}
@@ -344,12 +488,90 @@ function Overview({ workspace, salespersonCount, onOpenSalespeople }: { workspac
           </div>
           <div className="flex min-h-48 flex-col items-center justify-center text-center">
             <ClipboardList className="size-6 text-muted-foreground/60" />
-            <p className="mt-2 text-sm font-medium">No referrals yet</p>
+            <p className="mt-2 text-sm font-medium">{workspace === "admin" ? "No owners yet" : "No referrals yet"}</p>
             <p className="mt-1 text-sm text-muted-foreground">Owner activity will appear here.</p>
           </div>
         </section>
       </div>
     </>
+  );
+}
+
+function QuickSearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [ownerSearchNumber, setOwnerSearchNumber] = useState("");
+  const [searchedOwner, setSearchedOwner] = useState<OwnerRecord | null>();
+
+  function searchOwner(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSearchedOwner(sampleOwners.find((owner) => owner.mobile === ownerSearchNumber.trim()) ?? null);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-lg p-6 sm:max-w-[560px] sm:p-8">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="text-2xl font-medium">Quick Search</DialogTitle>
+          <DialogDescription>Find an owner’s properties by their mobile number.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={searchOwner} className="space-y-3">
+          <Input
+            aria-label="Owner mobile number"
+            autoComplete="off"
+            inputMode="numeric"
+            maxLength={10}
+            onChange={(event) => {
+              setOwnerSearchNumber(event.target.value.replace(/\D/g, ""));
+              setSearchedOwner(undefined);
+            }}
+            pattern="[0-9]{10}"
+            placeholder="Enter Number"
+            required
+            type="tel"
+            value={ownerSearchNumber}
+          />
+          <Button type="submit" className="w-full gap-2">
+            <Search aria-hidden="true" className="size-4" />
+            Search
+          </Button>
+        </form>
+        <p className="text-xs text-muted-foreground">Preview only. Try sample number 0000000001.</p>
+        {searchedOwner === null && (
+          <p role="status" className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
+            No owner found for that number.
+          </p>
+        )}
+        {searchedOwner && (
+          <div className="border-t border-border pt-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="font-medium">{searchedOwner.name}</h3>
+              <span className="text-sm text-muted-foreground">+91 {searchedOwner.mobile}</span>
+            </div>
+            <h4 className="mt-4 text-sm font-medium">Properties</h4>
+            <div className="mt-3 space-y-3">
+              {searchedOwner.properties.map((property) => (
+                <article key={property.name} className="rounded-md border border-border p-4">
+                  <p className="font-medium">{property.name}</p>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Type</dt>
+                      <dd className="text-right">{property.type}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Address</dt>
+                      <dd className="text-right">{property.address}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Status</dt>
+                      <dd className="text-right">{property.status}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -359,6 +581,10 @@ function DataTable({
   headers,
   emptyTitle,
   emptyDescription,
+  filterLabel,
+  filterValue,
+  filterOptions,
+  onFilterChange,
   onSearch,
   children,
 }: {
@@ -367,6 +593,10 @@ function DataTable({
   headers: string[];
   emptyTitle: string;
   emptyDescription: string;
+  filterLabel?: string;
+  filterValue?: string;
+  filterOptions?: string[];
+  onFilterChange?: (value: string) => void;
   onSearch?: (value: string) => void;
   children?: React.ReactNode;
 }) {
@@ -377,7 +607,21 @@ function DataTable({
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input aria-label={searchLabel} placeholder={searchLabel} onChange={(event) => onSearch?.(event.target.value)} className="h-10 pl-9" />
         </div>
-        <span className="text-xs text-muted-foreground">{count} {count === 1 ? "record" : "records"}</span>
+        <div className="flex items-center gap-3">
+          {filterLabel && filterOptions && onFilterChange && (
+            <select
+              aria-label={filterLabel}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              onChange={(event) => onFilterChange(event.target.value)}
+              value={filterValue}
+            >
+              {filterOptions.map((option) => (
+                <option key={option} value={option}>{option === "all" ? "All statuses" : option}</option>
+              ))}
+            </select>
+          )}
+          <span className="text-xs text-muted-foreground">{count} {count === 1 ? "record" : "records"}</span>
+        </div>
       </div>
       <div className="overflow-x-auto border-t border-border">
         <table className="w-full min-w-[720px] border-collapse text-left text-sm">
@@ -398,20 +642,15 @@ function DataTable({
   );
 }
 
-function ProfilePanel({ workspace }: { workspace: Workspace }) {
-  return (
-    <section className="max-w-3xl rounded-lg border border-border bg-card p-6 shadow-sm sm:p-8">
-      <div className="grid size-11 place-items-center rounded-md bg-accent text-primary"><MapPin className="size-5" /></div>
-      <h2 className="mt-5 text-lg font-medium">{workspace === "salesperson" ? "Salesperson profile" : "Team details"}</h2>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{workspace === "salesperson" ? "Profile information will appear here." : "Administration profile information will appear here."}</p>
-    </section>
-  );
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block space-y-1.5 text-sm font-medium">{label}{children}</label>;
 }
 
 function StatusPill({ label }: { label: string }) {
-  return <span className="inline-flex rounded-sm bg-portal-success-soft px-2 py-1 font-mono text-[10px] tracking-wide text-portal-success-foreground">{label}</span>;
+  const tone = label === "Failed" || label === "Rejected"
+    ? "bg-destructive/10 text-destructive"
+    : label === "Pending" || label === "Processing"
+      ? "bg-portal-orange/10 text-primary"
+      : "bg-portal-success-soft text-portal-success-foreground";
+  return <span className={`inline-flex rounded-sm px-2 py-1 font-mono text-[10px] tracking-wide ${tone}`}>{label.toUpperCase()}</span>;
 }
